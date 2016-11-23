@@ -112,7 +112,6 @@ float f_v(int i, int j) {
 	return resp;
 }
 
-
 // -------------------------- funções de contas gpu -------------------------- //
 __device__ float f_a(int i, int j, float h1, float h2) {
 	float x = i * h1;
