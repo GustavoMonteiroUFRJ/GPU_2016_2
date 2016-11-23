@@ -1,18 +1,7 @@
 /* Aluno.: Gustavo Ribeir Monteiro */
 /* Codigo:  */
 
-/* Para compilar: nvcc -o difusao.out difusao.cu */
-
-
-/*
-
-LISTA DA COISAS PARA FAZER
-
-* implementar as coisas para GPU
-* implementar a main
-* use_fest_math flag para compilador! ( pesquisar )
-
-*/
+/* Para compilar: nvcc -o gpu_difusao.out gpu_difusao.cu */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,7 +14,6 @@ LISTA DA COISAS PARA FAZER
 // GET_TIME(inicio);
 // GET_TIME(fim);
 
-int interacoes;
 
 #define MAX_THREAD 512
 #define MAX_BLOCOS 2000
@@ -35,27 +23,34 @@ int interacoes;
 #define M_PIf 3.141592653589f
 
 
-
 //para checar erros chamadas Cuda
 #define CUDA_SAFE_CALL(call) { \
 cudaError_t err = call;     \
 if(err != cudaSuccess) {    \
 	fprintf(stderr,"Erro no arquivo '%s', linha %i: %s.\n",__FILE__, __LINE__,cudaGetErrorString(err)); \
-	exit(EXIT_FAILURE); } }
+	exit(EXIT_FAILURE); \
+} }
 
-	int N_threads_x = THREAD_X;
-	int N_threads_y = THREAD_Y;
-	int N_blocs_x = 1;
-	int N_blocs_y = 1;
+// flags para o programa! 
+int verboso = 0;
+int executa_gpu = 1;
+int executa_cpu = 1;
+
+int interacoes;
+
+int N_threads_x = THREAD_X;
+int N_threads_y = THREAD_Y;
+int N_blocs_x = 1;
+int N_blocs_y = 1;
 
 // variaveis para contar tempo
-	double inicio, fim;
-	double tempo_seq, tempo_gpu;
-	double tempo_ida, tempo_volta;
-	float delta_eventos;
+double inicio, fim;
+double tempo_seq, tempo_gpu;
+double tempo_ida, tempo_volta;
+float delta_eventos;
 
 // matriz da chapa
-	float *v;
+float *v;
 
 float h1 = 0; // distancia orizontal dos potos
 float h2 = 0; // distancia vertical dos potos
@@ -194,7 +189,7 @@ __global__ void kernel_azul(float* d_v, float h1, float h2, float n1, float n2, 
 			f_e(i, j, h1, h2) * f_v(d_v, i + 1, j, h1) +
 			f_s(i, j, h1, h2) * f_v(d_v, i, j - 1, h1) +
 			f_n(i, j, h1, h2) * f_v(d_v, i, j + 1, h1));
-}
+	}
 }
 
 // imprime o momento da chapa
@@ -251,6 +246,7 @@ void gauss_seidel_sequencial_gpu() {
 	tempo_volta =  inicio - fim;
 }
 
+// inicialização das variáveis globais e da matriz
 void init() {
 	h1 = 1.0 / (n1 + 1);
 	h2 = 1.0 / (n2 + 1);
@@ -286,30 +282,61 @@ void gauss_seidel_sequencial() {
 		for ( i = 1; i < n1 + 1; i += 1) {
 			for ( j = i % 2 ? 1 : 2 ; j < n2 + 1; j += 2) {
 				aux = f_o(i, j) * f_v(i - 1, j) +
-				      f_e(i, j) * f_v(i + 1, j) +
-				      f_s(i, j) * f_v(i, j - 1) +
-				      f_n(i, j) * f_v(i, j + 1);
+				f_e(i, j) * f_v(i + 1, j) +
+				f_s(i, j) * f_v(i, j - 1) +
+				f_n(i, j) * f_v(i, j + 1);
 				v[i * tam + j] = (1 - f_w(i, j)) * f_v(i, j) + f_w(i, j) * aux;
 			}
 		}
 		for ( i = 1; i < n1 + 1; i += 1) {
 			for ( j = i % 2 ? 2 : 1; j < n2 + 1; j += 2) {
 				aux = f_o(i, j) * f_v(i - 1, j) +
-				      f_e(i, j) * f_v(i + 1, j) +
-				      f_s(i, j) * f_v(i, j - 1) +
-				      f_n(i, j) * f_v(i, j + 1);
+				f_e(i, j) * f_v(i + 1, j) +
+				f_s(i, j) * f_v(i, j - 1) +
+				f_n(i, j) * f_v(i, j + 1);
 				v[i * tam + j] = (1 - f_w(i, j)) * f_v(i, j) + f_w(i, j) * aux;
 			}
 		}
 	}
 }
 
-int main(int argc, char** argv) {
-
+// checa se a entrada da main está correta e incicializa as falgs
+int checa_entrada(const int argc, const char** argv){
 	if( argc < 3){
 		printf("Falta de parametros!!! Entre com %s <numero de pontos em x> <numero de pontos em y> <numero de interações>\n", argv[0]);
 		return -1;
 	}
+	if (argv[1][1] == '-' || argv[2][1] == '-' || argv[3][1] == '-'){
+		return -1;
+	}
+	if( argc > 3){
+		for (int i = 4; i <= argc; ++i){
+			if(argv[i][1] == '-'){
+				switch (argv[i][2]){
+					case 'v':
+					case 'V':
+					verboso = 1;
+					break;
+
+					case 'g':
+					case 'G':
+					executa_cpu = 0;;
+					break;
+					
+					case 'c':
+					case 'C':
+					executa_gpu = 0;;
+					break;
+				}
+			}
+		}
+	}
+	return 0;	
+}
+
+int main(const int argc, const char** argv) {
+
+	if(checa_entrada(argc,argv) == -1) return -1;
 
 	FILE *file;
 	n1 = atoi(argv[1]);
@@ -317,44 +344,53 @@ int main(int argc, char** argv) {
 	interacoes = atoi(argv[3]);
 
 	/*-------------- GPU -----------------*/
-	init();
+	if(executa_gpu){
+		if(verboso) printf("Iniciando GPU...");
+		init();
 
-	gauss_seidel_sequencial_gpu();
+		if(verboso) printf(" Executando\n");
+		gauss_seidel_sequencial_gpu();
 
-	// impressao em arquivo texto
-	file = fopen("out_gpu.txt", "w");
-	int i, j;
-	for ( i = 0; i < n1 + 2; i++ ) {
-		for ( j = 0; j < n2 + 2; j++ ) {
-			fprintf(file, "%6.3f ", v[i * (n1 + 2) + j] );
+		// impressao em arquivo texto
+		file = fopen("out_gpu.txt", "w"); 
+		for ( int i = 0; i < n1 + 2; i++ ) {
+			for ( int j = 0; j < n2 + 2; j++ ) {
+				fprintf(file, "%6.3f ", v[i * (n1 + 2) + j] );
+			}
+			fprintf(file, "\n");
 		}
-		fprintf(file, "\n");
-	}
+		if(verboso) plot_v();
 
-	fclose(file);
-	free(v);
+		fclose(file);
+		free(v);
+	}
 
 	/*-------------- CPU -----------------*/
+	if( executa_cpu){
 
-	init();
+		if(verboso) printf("Iniciando CPU...");
+		init();
 
-	GET_TIME(inicio);
-	gauss_seidel_sequencial();
-	GET_TIME(fim);
+		if(verboso) printf(" Executando\n");
+		GET_TIME(inicio);
+		gauss_seidel_sequencial();
+		GET_TIME(fim);
 
-	tempo_seq = fim - inicio;
+		tempo_seq = fim - inicio;
 
-	// impressao em arquivo texto
-	file = fopen("out_cpu.txt", "w");
-	for ( i = 0; i < n1 + 2; i++ ) {
-		for ( j = 0; j < n2 + 2; j++ ) {
-			fprintf(file, "%6.3f ", v[i * (n1 + 2) + j] );
+		// impressao em arquivo texto
+		file = fopen("out_cpu.txt", "w");
+		for ( int i = 0; i < n1 + 2; i++ ) {
+			for ( int j = 0; j < n2 + 2; j++ ) {
+				fprintf(file, "%6.3f ", v[i * (n1 + 2) + j] );
+			}
+			fprintf(file, "\n");
 		}
-		fprintf(file, "\n");
-	}
+		if(verboso) plot_v();
 
-	fclose(file);
-	free(v);
+		fclose(file);
+		free(v);
+	}
 
 	//------------------------------- imprime dos tempos de execucao ----------------------//
 	printf("Tempo sequencial = %g seg \n", tempo_seq);

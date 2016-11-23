@@ -1,17 +1,8 @@
 /* Aluno.: Gustavo Ribeir Monteiro */
 /* Codigo:  */
 
-/* Para compilar: nvcc -o difusao.out difusao.cu */
-
-
-/*
-
-LISTA DA COISAS PARA FAZER
-
-* implementar as coisas para GPU
-* implementar a main
-
-*/
+/* Para compilar: gcc -o difusao.out difusao.c */
+/* Executar contando tempo: time ./difusao.out */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,17 +10,7 @@ LISTA DA COISAS PARA FAZER
 #include <unistd.h>
 #include <math.h>
 
-// para tomada de tempo
-// #include "clock_timer.h"
-// GET_TIME(inicio);
-// GET_TIME(fim);
-
-int INTERACAO;
-
-#define MAX_THREAD 512
-#define MAX_BLOCOS 2000
-#define THREAD_X 32
-#define THREAD_Y 16
+int interacao;
 
 float *v;
 
@@ -105,7 +86,7 @@ void gauss_seidel_sequencial() {
 	int i, j, k;
 	float aux;
 
-	for ( k = 0; k < INTERACAO; ++k) {
+	for ( k = 0; k < interacao; ++k) {
 		for ( i = 1; i < n1 + 1; i += 1) {
 			for ( j = i % 2 ? 1 : 2 ; j < n2 + 1; j += 2) {
 				// sleep(1);
@@ -169,7 +150,7 @@ int main(int argc, char** argv) {
 	FILE *file;
 	n1 = atoi(argv[1]);
 	n2 = atoi(argv[2]);
-	INTERACAO = atoi(argv[3]);
+	interacao = atoi(argv[3]);
 
 	// printf("comecando init\n");
 	init();
