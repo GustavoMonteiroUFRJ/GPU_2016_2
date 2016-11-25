@@ -16,6 +16,8 @@ float *v;
 
 float h1 = 0;
 float h2 = 0;
+float denominadro1; // = (4 * (1 + (h1 * h1 / (h2 * h2))))
+float denominadro2; // = (4 * (1 + (h2 * h2 / (h1 * h1))))
 int n1 = 1;
 int n2 = 1;
 
@@ -23,6 +25,8 @@ float uo = 0;
 float ue = 10;
 float us = 5;
 float un = 5;
+
+
 
 float f_a(int i, int j) {
 	float x = i * h1;
@@ -37,22 +41,22 @@ float f_b(int i, int j) {
 	return resp;
 }
 float f_o(int i, int j) {
-	float resp = ( 2 + h1 * f_a(i, j) ) / (4 * (1 + (h1 * h1 / (h2 * h2))));
+	float resp = ( 2 + h1 * f_a(i, j) ) / denominadro1;
 	// printf("f_o(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
 float f_e(int i, int j) {
-	float resp = ( 2 - h1 * f_a(i, j) ) / (4 * (1 + (h1 * h1 / (h2 * h2))));
+	float resp = ( 2 - h1 * f_a(i, j) ) / denominadro1;
 	// printf("f_e(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
 float f_s(int i, int j) {
-	float resp = ( 2 + h2 * f_b(i, j) ) / (4 * (1 + (h2 * h2 / (h1 * h1))));
+	float resp = ( 2 + h2 * f_b(i, j) ) / denominadro2;
 	// printf("f_s(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
 float f_n(int i, int j) {
-	float resp = ( 2 - h2 * f_b(i, j) ) / (4 * (1 + (h2 * h2 / (h1 * h1))));
+	float resp = ( 2 - h2 * f_b(i, j) ) / denominadro2;
 	// printf("f_n(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
@@ -122,6 +126,9 @@ void gauss_seidel_sequencial() {
 void init() {
 	h1 = 1.0 / (n1 + 1);
 	h2 = 1.0 / (n2 + 1);
+
+	denominadro1 = (4 * (1 + (h1 * h1 / (h2 * h2))));
+	denominadro2 = (4 * (1 + (h2 * h2 / (h1 * h1))));
 
 	v = (float*) malloc((n1 + 2) * (n2 + 2) * sizeof(float));
 
