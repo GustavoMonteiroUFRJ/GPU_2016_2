@@ -27,6 +27,8 @@ float *b;
 
 float h1 = 0;
 float h2 = 0;
+float denominadro1; // = (4 * (1 + (h1 * h1 / (h2 * h2))))
+float denominadro2; // = (4 * (1 + (h2 * h2 / (h1 * h1))))
 int n1 = 1;
 int n2 = 1;
 
@@ -34,6 +36,7 @@ float uo = 0;
 float ue = 10;
 float us = 5;
 float un = 5;
+ 
 
 float f_a(int i, int j, int tam) {
 	float resp = a[i * tam + j];
@@ -46,22 +49,22 @@ float f_b(int i, int j, int tam) {
 	return resp;
 }
 float f_o(int i, int j, int tam) {
-	float resp = ( 2 + h1 * f_a(i, j, tam) ) / (4 * (1 + (h1 * h1 / (h2 * h2))));
+	float resp = ( 2 + h1 * f_a(i, j, tam) ) / denominadro1;
 	// printf("f_o(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
 float f_e(int i, int j, int tam) {
-	float resp = ( 2 - h1 * f_a(i, j, tam) ) / (4 * (1 + (h1 * h1 / (h2 * h2))));
+	float resp = ( 2 - h1 * f_a(i, j, tam) ) / denominadro1;
 	// printf("f_e(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
 float f_s(int i, int j, int tam) {
-	float resp = ( 2 + h2 * f_b(i, j, tam) ) / (4 * (1 + (h2 * h2 / (h1 * h1))));
+	float resp = ( 2 + h2 * f_b(i, j, tam) ) / denominadro2;
 	// printf("f_s(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
 float f_n(int i, int j, int tam) {
-	float resp = ( 2 - h2 * f_b(i, j, tam) ) / (4 * (1 + (h2 * h2 / (h1 * h1))));
+	float resp = ( 2 - h2 * f_b(i, j, tam) ) / denominadro2;
 	// printf("f_n(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
@@ -96,31 +99,31 @@ void gauss_seidel_sequencial() {
 	int tam = n1 + 2;
 	int i, j, k;
 	float aux;
-	Node* pt;
+	Node* ptr;
 
 	for ( k = 0; k < interacao; ++k) {
 		for ( i = 1; i < n1 + 1; i += 1) {
 			for ( j = i % 2 ? 1 : 2 ; j < n2 + 1; j += 2) {
-				pt = &v[i * tam + j];
+				ptr = &v[i * tam + j];
 
 				aux = 
-				pt->o * f_v(i - 1, j,tam) +
-				pt->e * f_v(i + 1, j,tam) +
-				pt->s * f_v(i, j - 1,tam) +
-				pt->n * f_v(i, j + 1,tam);
-				pt->temp = (1 - pt->w) * pt->temp + pt->w * aux;
+				ptr->o * f_v(i - 1, j,tam) +
+				ptr->e * f_v(i + 1, j,tam) +
+				ptr->s * f_v(i, j - 1,tam) +
+				ptr->n * f_v(i, j + 1,tam);
+				ptr->temp = (1 - ptr->w) * ptr->temp + ptr->w * aux;
 			}
 		}
 		for ( i = 1; i < n1 + 1; i += 1) {
 			for ( j = i % 2 ? 2 : 1; j < n2 + 1; j += 2) {
-				pt = &v[i * tam + j];
+				ptr = &v[i * tam + j];
 				
 				aux = 
-				pt->o * f_v(i - 1, j,tam) +
-				pt->e * f_v(i + 1, j,tam) +
-				pt->s * f_v(i, j - 1,tam) +
-				pt->n * f_v(i, j + 1,tam);
-				pt->temp = (1 - pt->w) * pt->temp + pt->w * aux;
+				ptr->o * f_v(i - 1, j,tam) +
+				ptr->e * f_v(i + 1, j,tam) +
+				ptr->s * f_v(i, j - 1,tam) +
+				ptr->n * f_v(i, j + 1,tam);
+				ptr->temp = (1 - ptr->w) * ptr->temp + ptr->w * aux;
 			}
 		}
 	}
@@ -130,6 +133,9 @@ void gauss_seidel_sequencial() {
 void init() {
 	h1 = 1.0 / (n1 + 1);
 	h2 = 1.0 / (n2 + 1);
+	denominadro1 = (4 * (1 + (h1 * h1 / (h2 * h2))));
+	denominadro2 = (4 * (1 + (h2 * h2 / (h1 * h1))));
+
 
 	v = (Node*) malloc((n1 + 2) * (n2 + 2) * sizeof(Node));
 	a = (float*) malloc((n1 + 2) * (n2 + 2) * sizeof(float));
@@ -145,7 +151,7 @@ void init() {
 	int tam = n1 + 2;
 	int temp_media = (ue + uo + un + us) / 4 ;
 
-	Node* pt;
+	Node* ptr;
   	// casos de borda
 	for ( i = 0; i < n1 + 2; i++ ) {
 		v[i * tam + 0].temp = un;
@@ -169,12 +175,12 @@ void init() {
 	// inicializando as estruturas
 	for ( i = 1; i < n1 + 1; i++ ) {
 		for ( j = 1; j < n2 + 1; j++ ) {
-			pt = &v[i * tam + j];
-			pt->temp = temp_media;
-			pt->n = f_n(i,j,tam);
-			pt->s = f_s(i,j,tam);
-			pt->e = f_e(i,j,tam);
-			pt->o = f_o(i,j,tam);
+			ptr = &v[i * tam + j];
+			ptr->temp = temp_media;
+			ptr->n = f_n(i,j,tam);
+			ptr->s = f_s(i,j,tam);
+			ptr->e = f_e(i,j,tam);
+			ptr->o = f_o(i,j,tam);
 		} 
 	}
 	// calculando w
