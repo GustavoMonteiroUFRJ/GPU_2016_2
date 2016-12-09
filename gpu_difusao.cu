@@ -31,7 +31,7 @@ if(err != cudaSuccess) {    \
 	exit(EXIT_FAILURE); \
 } }
 
-// flags para o programa! 
+// flags para o programa!
 int verboso = 0;
 int executa_gpu = 1;
 int executa_cpu = 1;
@@ -67,13 +67,13 @@ float un = 5;  // temperatura fixa a norte
 float f_a(int i, int j) {
 	float x = i * h1;
 	float y = j * h2;
-	float resp = 5.0 * x * (1 - x) * (-y + 0.5);
+	float resp = 500.0 * x * (1 - x) * (-y + 0.5);
 	return resp;
 }
 float f_b(int i, int j) {
 	float x = i * h1;
 	float y = j * h2;
-	float resp = 5.0 * y * (1 - y) * (x - 0.5);
+	float resp = 500.0 * y * (1 - y) * (x - 0.5);
 	return resp;
 }
 float f_o(int i, int j) {
@@ -116,13 +116,13 @@ float f_v(int i, int j) {
 __device__ float f_a(int i, int j, float h1, float h2) {
 	float x = i * h1;
 	float y = j * h2;
-	float resp = 500 * x * (1 - x) * (-y + 0.5f);
+	float resp = 500.0 * x * (1 - x) * (-y + 0.5f);
 	return resp;
 }
 __device__ float f_b(int i, int j, float h1, float h2) {
 	float x = i * h1;
 	float y = j * h2;
-	float resp = 500 * y * (1 - y) * (x - 0.5f);
+	float resp = 500.0 * y * (1 - y) * (x - 0.5f);
 	return resp;
 }
 __device__ float f_o(int i, int j, float h1, float h2) {
@@ -161,33 +161,62 @@ __device__ float f_v(float* d_v, int i, int j, int n1) {
 	return resp;
 }
 
+__device__ void plot_v(float* d_v, int n1, int n2) {
+	int i, j;
+		for ( i = 0; i < n1 + 2; i++ ) {
+			for ( j = 0; j < n2 + 2; j++ ) {
+				printf("[%d, %d] = %6.3f ", i, j, d_v[i * (n1 + 2) + j] );
+			}
+			printf("\n");
+		}
+}
+
 // interação de gauss_seidel em uas etapas
-__global__ void kernel_vemelho(float* d_v, float h1, float h2, float n1, float n2, int tam) {
+__global__ void kernel_vemelho(float* d_v, float h1, float h2, float n1, float n2, int tam, int verboso) {
 	int i = 1 + blockIdx.x * blockDim.x + threadIdx.x;
 	int j = 1 + 2 * blockIdx.y * blockDim.y + threadIdx.y;
-	j += i % 2;
+	float w, aux;
 
-	if (i < n1 + 1 && j < n2 + 1) {
-		float w = f_w(i, j, h1, h2);
-		d_v[i * tam + j] = (1 - w) * f_v(d_v, i, j, h1) + w *
-		(f_o(i, j, h1, h2) * f_v(d_v, i - 1, j, h1) +
-			f_e(i, j, h1, h2) * f_v(d_v, i + 1, j, h1) +
-			f_s(i, j, h1, h2) * f_v(d_v, i, j - 1, h1) +
-			f_n(i, j, h1, h2) * f_v(d_v, i, j + 1, h1));
+	if (j % 2 != i % 2) { // checa se é vermelho
+		if (i < n1 + 1 && j < n2 + 1) {
+			if (verboso) printf("verm\t[%d][%d]\n", i, j);
+			w = f_w(i, j, h1, h2);
+			if (verboso) printf("\tw(%d,%d):%f\n", i, j, w);
+			aux =
+				f_o(i, j, h1, h2) * f_v(d_v, i - 1, j, n1) +
+				f_e(i, j, h1, h2) * f_v(d_v, i + 1, j, n1) +
+				f_s(i, j, h1, h2) * f_v(d_v, i, j - 1, n1) +
+				f_n(i, j, h1, h2) * f_v(d_v, i, j + 1, n1);
+			if (verboso) printf("\taux(%d,%d):%f\n", i, j, aux);
+			if (verboso) printf("\td_v(%d,%d):%f\n", i, j, f_v(d_v, i, j, n1));
+			d_v[i * tam + j] = (1 - w) * f_v(d_v, i, j, n1) + w * aux;
+			if (verboso) printf("\tres(%d,%d):%f\n", i, j, d_v[i * tam + j]);
+		}
 	}
 }
-__global__ void kernel_azul(float* d_v, float h1, float h2, float n1, float n2, int tam) {
+__global__ void kernel_azul(float* d_v, float h1, float h2, float n1, float n2, int tam, int verboso) {
 	int i = 1 + blockIdx.x * blockDim.x + threadIdx.x;
 	int j = 1 + 2 * blockIdx.y * blockDim.y + threadIdx.y;
-	j += (i + 1) % 2;
+	float w, aux;
 
-	if (i < n1 + 1 && j < n2 + 1) {
-		float w = f_w(i, j, h1, h2);
-		d_v[i * tam + j] = (1 - w) * f_v(d_v, i, j, h1) + w *
-		(f_o(i, j, h1, h2) * f_v(d_v, i - 1, j, h1) +
-			f_e(i, j, h1, h2) * f_v(d_v, i + 1, j, h1) +
-			f_s(i, j, h1, h2) * f_v(d_v, i, j - 1, h1) +
-			f_n(i, j, h1, h2) * f_v(d_v, i, j + 1, h1));
+	//plot_v(d_v, n1, n2);
+
+	if (j % 2 == i % 2) { // checa se é azul
+		if (i < n1 + 1 && j < n2 + 1) {
+			if (verboso) printf("verboso %d", verboso);
+			if (verboso) printf("azul\t[%d][%d]\n", i, j);
+			w = f_w(i, j, h1, h2);
+			if (verboso) printf("\tw(%d,%d):%f\n", i, j, w);
+			aux =
+				f_o(i, j, h1, h2) * f_v(d_v, i - 1, j, n1) +
+				f_e(i, j, h1, h2) * f_v(d_v, i + 1, j, n1) +
+				f_s(i, j, h1, h2) * f_v(d_v, i, j - 1, n1) +
+				f_n(i, j, h1, h2) * f_v(d_v, i, j + 1, n1);
+			if (verboso) printf("\taux(%d,%d):%f\n", i, j, aux);
+			if (verboso) printf("\td_v(%d,%d):%f\n", i, j, f_v(d_v, i, j, n1));
+			d_v[i * tam + j] = (1 - w) * f_v(d_v, i, j, n1) + w * aux;
+			if (verboso) printf("\tres(%d,%d):%f\n", i, j, d_v[i * tam + j]);
+		}
 	}
 }
 
@@ -196,7 +225,7 @@ void plot_v() {
 	int i, j;
 	for ( i = 0; i < n1 + 2; i++ ) {
 		for ( j = 0; j < n2 + 2; j++ ) {
-			printf("%0.4f ", v[i * (n1 + 2) + j] );
+			printf("%6.3f ", v[i * (n1 + 2) + j] );
 		}
 		printf("\n");
 	}
@@ -211,7 +240,7 @@ void gauss_seidel_sequencial_gpu() {
 
 	GET_TIME(inicio);
 	CUDA_SAFE_CALL(cudaMalloc((void**) &d_v, (n1 + 2) * (n2 + 2) * sizeof(float)));
-	CUDA_SAFE_CALL(cudaMemcpy(d_v, v, (n1 + 2) * (n2 + 2) * sizeof(float) , cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(d_v, v, (n1 + 2) * (n2 + 2) * sizeof(float), cudaMemcpyHostToDevice));
 	GET_TIME(fim);
 
 	tempo_ida = fim - inicio;
@@ -227,10 +256,10 @@ void gauss_seidel_sequencial_gpu() {
 	CUDA_SAFE_CALL(cudaEventRecord(start));
 
 	for ( k = 0; k < interacoes; ++k) {
-		kernel_vemelho <<< grade_blocos , threads_per_blocos >>> (d_v, h1, h2, n1, n2, tam);
+		kernel_vemelho <<< grade_blocos , threads_per_blocos >>> (d_v, h1, h2, n1, n2, tam, verboso);
 		CUDA_SAFE_CALL(cudaGetLastError());
 
-		kernel_azul <<< grade_blocos , threads_per_blocos >>> (d_v, h1, h2, n1, n2, tam);
+		kernel_azul <<< grade_blocos , threads_per_blocos >>> (d_v, h1, h2, n1, n2, tam, verboso);
 		CUDA_SAFE_CALL(cudaGetLastError());
 	}
 
@@ -279,21 +308,33 @@ void gauss_seidel_sequencial() {
 
 	for ( k = 0; k < interacoes; ++k) {
 		for ( i = 1; i < n1 + 1; i += 1) {
-			for ( j = i % 2 ? 1 : 2 ; j < n2 + 1; j += 2) {
-				aux = f_o(i, j) * f_v(i - 1, j) +
-				f_e(i, j) * f_v(i + 1, j) +
-				f_s(i, j) * f_v(i, j - 1) +
-				f_n(i, j) * f_v(i, j + 1);
+			for ( j = i % 2 ? 2 : 1 ; j < n2 + 1; j += 2) {
+				if (verboso) printf("verm\t[%d][%d]\n", i, j);
+				if (verboso) printf("\tw:%f\n", f_w(i, j));
+				aux =
+					f_o(i, j) * f_v(i - 1, j) +
+					f_e(i, j) * f_v(i + 1, j) +
+					f_s(i, j) * f_v(i, j - 1) +
+					f_n(i, j) * f_v(i, j + 1);
+				if (verboso) printf("\taux:%f\n", aux);
+
 				v[i * tam + j] = (1 - f_w(i, j)) * f_v(i, j) + f_w(i, j) * aux;
+				if (verboso) printf("\td_v:%f\n", v[i * tam + j]);
 			}
 		}
 		for ( i = 1; i < n1 + 1; i += 1) {
-			for ( j = i % 2 ? 2 : 1; j < n2 + 1; j += 2) {
-				aux = f_o(i, j) * f_v(i - 1, j) +
-				f_e(i, j) * f_v(i + 1, j) +
-				f_s(i, j) * f_v(i, j - 1) +
-				f_n(i, j) * f_v(i, j + 1);
+			for ( j = i % 2 ? 1 : 2; j < n2 + 1; j += 2) {
+				if (verboso) printf("azul\t[%d][%d]\n", i, j);
+				if (verboso) printf("\tw:%f\n", f_w(i, j));
+				aux =
+					f_o(i, j) * f_v(i - 1, j) +
+					f_e(i, j) * f_v(i + 1, j) +
+					f_s(i, j) * f_v(i, j - 1) +
+					f_n(i, j) * f_v(i, j + 1);
+				if (verboso) printf("\taux:%f\n", aux);
+
 				v[i * tam + j] = (1 - f_w(i, j)) * f_v(i, j) + f_w(i, j) * aux;
+				if (verboso) printf("\td_v:%f\n", v[i * tam + j]);
 			}
 		}
 	}
@@ -309,9 +350,9 @@ int checa_entrada(const int argc, const char** argv){
 		return -1;
 	}
 	if( argc > 3){
-		for (int i = 4; i <= argc; ++i){
-			if(argv[i][1] == '-'){
-				switch (argv[i][2]){
+		for (int i = 0; i < argc; ++i){
+			if(argv[i][0] == '-'){
+				switch (argv[i][1]){
 					case 'v':
 					case 'V':
 					verboso = 1;
@@ -319,18 +360,18 @@ int checa_entrada(const int argc, const char** argv){
 
 					case 'g':
 					case 'G':
-					executa_cpu = 0;;
+					executa_cpu = 0;
 					break;
-					
+
 					case 'c':
 					case 'C':
-					executa_gpu = 0;;
+					executa_gpu = 0;
 					break;
 				}
 			}
 		}
 	}
-	return 0;	
+	return 0;
 }
 
 int main(const int argc, const char** argv) {
@@ -344,14 +385,15 @@ int main(const int argc, const char** argv) {
 
 	/*-------------- GPU -----------------*/
 	if(executa_gpu){
-		if(verboso) printf("Iniciando GPU...");
+		if(verboso) printf("Iniciando GPU...\n");
 		init();
 
+		if(verboso) plot_v();
 		if(verboso) printf(" Executando\n");
 		gauss_seidel_sequencial_gpu();
 
 		// impressao em arquivo texto
-		file = fopen("out_gpu.txt", "w"); 
+		file = fopen("out_gpu.txt", "w");
 		for ( int i = 0; i < n1 + 2; i++ ) {
 			for ( int j = 0; j < n2 + 2; j++ ) {
 				fprintf(file, "%6.3f ", v[i * (n1 + 2) + j] );
@@ -367,9 +409,10 @@ int main(const int argc, const char** argv) {
 	/*-------------- CPU -----------------*/
 	if( executa_cpu){
 
-		if(verboso) printf("Iniciando CPU...");
+		if(verboso) printf("Iniciando CPU...\n");
 		init();
 
+		if(verboso) plot_v();
 		if(verboso) printf(" Executando\n");
 		GET_TIME(inicio);
 		gauss_seidel_sequencial();
