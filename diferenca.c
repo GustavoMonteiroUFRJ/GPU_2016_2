@@ -9,7 +9,7 @@
 #define Erro 1e-5
 
 int main(int argc, char const *argv[]){
-	
+
 	if( argc < 4 ){
 		printf("Entre com o nome dos 2 arquivos e o tamanho de colunas\n");
 	}
