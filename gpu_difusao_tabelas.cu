@@ -38,12 +38,12 @@
 }
 
 typedef struct {
-	float temp;
-	float n;
-	float s;
-	float e;
-	float o;
-	float w;
+	double temp;
+	double n;
+	double s;
+	double e;
+	double o;
+	double w;
 } Node;
 
 // flags para o programa!
@@ -62,67 +62,67 @@ int N_blocs_y = 1;
 
 // matrizes cpu da chapa
 Node *v;
-float *a;
-float *b;
+double *a;
+double *b;
 
 // matrizes gpu da chapa
 Node *d_v;
-float *d_a;
-float *d_b;
+double *d_a;
+double *d_b;
 
-float h1 = 0; // distancia orizontal dos potos
-float h2 = 0; // distancia vertical dos potos
-float denominadro1; // = (4 * (1 + (h1 * h1 / (h2 * h2))))
-float denominadro2; // = (4 * (1 + (h2 * h2 / (h1 * h1))))
+double h1 = 0; // distancia orizontal dos potos
+double h2 = 0; // distancia vertical dos potos
+double denominadro1; // = (4 * (1 + (h1 * h1 / (h2 * h2))))
+double denominadro2; // = (4 * (1 + (h2 * h2 / (h1 * h1))))
 int n1 = 1;   // quantidade de potnos em uma linha orizontal
 int n2 = 1;   // quantidade de potnos em uma linha vertical
 
-float uo = 0;  // temperatura fixa a oeste
-float ue = 10; // temperatura fixa a este
-float us = 5;  // temperatura fixa a sul
-float un = 5;  // temperatura fixa a norte
+double uo = 0;  // temperatura fixa a oeste
+double ue = 10; // temperatura fixa a este
+double us = 5;  // temperatura fixa a sul
+double un = 5;  // temperatura fixa a norte
 
 // variaveis para contar tempo
 double inicio, fim;
 double tempo_seq, tempo_gpu;
-double time_init_seq, time_init_gpu;
-
+double time_init_seq, time_init_gpu, tempo_volta;
+float delta_eventos;
 
 // ------------------------- funções de contas cpu -------------------------- //
-float f_a(int i, int j, int tam) {
-	float resp = a[i * tam + j];
+double f_a(int i, int j, int tam) {
+	double resp = a[i * tam + j];
 
 	return resp;
 }
-float f_b(int i, int j, int tam) {
-	float resp = b[i * tam + j];
+double f_b(int i, int j, int tam) {
+	double resp = b[i * tam + j];
 
 	return resp;
 }
-float f_o(int i, int j, int tam) {
-	float resp = ( 2.0 + h1 * f_a(i, j, tam) ) / denominadro1;
+double f_o(int i, int j, int tam) {
+	double resp = ( 2.0 + h1 * f_a(i, j, tam) ) / denominadro1;
 	// printf("f_o(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
-float f_e(int i, int j, int tam) {
-	float resp = ( 2.0 - h1 * f_a(i, j, tam) ) / denominadro1;
+double f_e(int i, int j, int tam) {
+	double resp = ( 2.0 - h1 * f_a(i, j, tam) ) / denominadro1;
 	// printf("f_e(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
-float f_s(int i, int j, int tam) {
-	float resp = ( 2.0 + h2 * f_b(i, j, tam) ) / denominadro2;
+double f_s(int i, int j, int tam) {
+	double resp = ( 2.0 + h2 * f_b(i, j, tam) ) / denominadro2;
 	// printf("f_s(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
-float f_n(int i, int j, int tam) {
-	float resp = ( 2.0 - h2 * f_b(i, j, tam) ) / denominadro2;
+double f_n(int i, int j, int tam) {
+	double resp = ( 2.0 - h2 * f_b(i, j, tam) ) / denominadro2;
 	// printf("f_n(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
 
-float f_q(int i, int j, int tam) {
+double f_q(int i, int j, int tam) {
 	int index = i*tam +j;
-	float resp = 2.0 * (sqrt( v[index].e * v[index].o) * cos(h1 * M_PI) + sqrt(v[index].s * v[index].n) * cos(h2 * M_PI));
+	double resp = 2.0 * (sqrt( v[index].e * v[index].o) * cos(h1 * M_PI) + sqrt(v[index].s * v[index].n) * cos(h2 * M_PI));
 	// printf("%f\t", sqrt(f_e(i, j, tam) * f_o(i, j, tam)));
 	// printf("%f\t", cos(h1 * M_PI));
 	// printf("%f\t", sqrt(f_s(i, j, tam) * f_n(i, j, tam)));
@@ -130,98 +130,98 @@ float f_q(int i, int j, int tam) {
 	// printf("f_q(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
-float f_w(int i, int j, int tam) {
-	float resp = 2.0 / (1.0 + sqrt(1.0 - pow(f_q(i, j, tam), 2)));
+double f_w(int i, int j, int tam) {
+	double resp = 2.0 / (1.0 + sqrt(1.0 - pow(f_q(i, j, tam), 2)));
 	// printf("f_w(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
-float f_v(int i, int j, int tam) {
-	float resp = v[i * tam + j].temp;
+double f_v(int i, int j, int tam) {
+	double resp = v[i * tam + j].temp;
 	// printf("f_v(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
 
 // -------------------------- funções de contas gpu -------------------------- //
-__device__ float f_a(float* d_a, int i, int j, int tam) {
-	float resp = d_a[i * tam + j];
+__device__ double f_a(double* d_a, int i, int j, int tam) {
+	double resp = d_a[i * tam + j];
 
 	return resp;
 }
-__device__ float f_b(float* d_b, int i, int j, int tam) {
-	float resp = d_b[i * tam + j];
+__device__ double f_b(double* d_b, int i, int j, int tam) {
+	double resp = d_b[i * tam + j];
 
 	return resp;
 }
-__device__ float f_o(float* d_a, int i, int j, int tam, float h1, float d_denominadro1) {
-	float resp = ( 2.0f + h1 * f_a(d_a, i, j, tam) ) / d_denominadro1;
+__device__ double f_o(double* d_a, int i, int j, int tam, double h1, double d_denominadro1) {
+	double resp = ( 2.0f + h1 * f_a(d_a, i, j, tam) ) / d_denominadro1;
 	// printf("f_o(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
-__device__ float f_e(float* d_a, int i, int j,int tam,float h1, float d_denominadro1) {
-	float resp = ( 2.0f - h1 * f_a(d_a,i, j, tam) ) / d_denominadro1;
+__device__ double f_e(double* d_a, int i, int j,int tam,double h1, double d_denominadro1) {
+	double resp = ( 2.0f - h1 * f_a(d_a,i, j, tam) ) / d_denominadro1;
 	// printf("f_e(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
-__device__ float f_s(float* d_b, int i, int j,int tam,float h2, float d_denominadro2) {
-	float resp = ( 2.0f + h2 * f_b(d_b, i, j, tam) ) / d_denominadro2;
+__device__ double f_s(double* d_b, int i, int j,int tam,double h2, double d_denominadro2) {
+	double resp = ( 2.0f + h2 * f_b(d_b, i, j, tam) ) / d_denominadro2;
 	// printf("f_s(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
-__device__ float f_n(float* d_b, int i, int j,int tam,float h2, float d_denominadro2){
-	float resp = ( 2.0f - h2 * f_b(d_b, i, j, tam) ) / d_denominadro2;
+__device__ double f_n(double* d_b, int i, int j,int tam,double h2, double d_denominadro2){
+	double resp = ( 2.0f - h2 * f_b(d_b, i, j, tam) ) / d_denominadro2;
 	// printf("f_n(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
 
-__device__ float f_q(Node* d_v, int i, int j,int tam, float h1, float h2) {
+__device__ double f_q(Node* d_v, int i, int j,int tam, double h1, double h2) {
 	int index = i * tam + j;
-	float resp = 2.0f * (sqrtf( d_v[index].e * d_v[index].o) * cosf(h1 * M_PIf) + sqrtf(d_v[index].s * d_v[index].n) * cosf(h2 * M_PIf));
+	double resp = 2.0f * (sqrtf( d_v[index].e * d_v[index].o) * cosf(h1 * M_PIf) + sqrtf(d_v[index].s * d_v[index].n) * cosf(h2 * M_PIf));
 	// printf("f_q(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
-__device__ float f_w(Node* d_v, int i, int j, int tam, float h1, float h2) {
-	float resp = 2.0f / (1.0f + sqrtf(1.0f - powf(f_q(d_v, i, j, tam, h1, h2), 2)));
+__device__ double f_w(Node* d_v, int i, int j, int tam, double h1, double h2) {
+	double resp = 2.0f / (1.0f + sqrtf(1.0f - powf(f_q(d_v, i, j, tam, h1, h2), 2)));
 	// printf("f_w(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
-__device__ float f_v(Node* d_v, int i, int j, int tam) {
-	float resp = d_v[i * tam + j].temp;
+__device__ double f_v(Node* d_v, int i, int j, int tam) {
+	double resp = d_v[i * tam + j].temp;
 	// printf("f_v(%d,%d) = %f\n", i, j, resp);
 	return resp;
 }
 
 // interação de gauss_seidel em uas etapas
-__global__ void kernel_vermelho(Node* d_v, float h1, float h2, float n1, float n2, int tam) {
+__global__ void kernel_vermelho(Node* d_v, double h1, double h2, double n1, double n2, int tam) {
 	int j = 1 + blockIdx.x * blockDim.x + threadIdx.x;
 	int i = 1 + blockIdx.y * blockDim.y + threadIdx.y;
 
 	if (i < n2 + 1 && j < n1 + 1 && (i+j) % 2 == 0) {
 		Node* ptr = &d_v[i * tam + j];
-		float w = ptr->w;
+		double w = ptr->w;
 		ptr->temp = (1.0f - w) * f_v(d_v, i, j, tam) + w *
-					(ptr->o * f_v(d_v, i, j - 1, tam) +
-					 ptr->e * f_v(d_v, i, j + 1, tam) +
-					 ptr->s * f_v(d_v, i - 1, j, tam) +
-					 ptr->n * f_v(d_v, i + 1, j, tam));
+						(ptr->o * f_v(d_v, i - 1, j, tam) +
+						 ptr->e * f_v(d_v, i + 1, j, tam) +
+						 ptr->s * f_v(d_v, i, j - 1, tam) +
+						 ptr->n * f_v(d_v, i, j + 1, tam));
 	}
 }
-__global__ void kernel_azul(Node* d_v, float h1, float h2, float n1, float n2, int tam) {
+__global__ void kernel_azul(Node* d_v, double h1, double h2, double n1, double n2, int tam) {
 	int j = 1 + blockIdx.x * blockDim.x + threadIdx.x;
 	int i = 1 + blockIdx.y * blockDim.y + threadIdx.y;
 
 	if (i < n2 + 1 && j < n1 + 1 && (i+j) % 2 == 1) {
 		Node* ptr = &d_v[i * tam + j];
-		float w = ptr->w;
+		double w = ptr->w;
 		ptr->temp = (1.0f - w) * f_v(d_v, i, j, tam) + w *
-					   (ptr->o * f_v(d_v, i, j - 1, tam) +
-					    ptr->e * f_v(d_v, i, j + 1, tam) +
-					    ptr->s * f_v(d_v, i - 1, j, tam) +
-					    ptr->n * f_v(d_v, i + 1, j, tam));
+					   (ptr->o * f_v(d_v, i - 1, j, tam) +
+					    ptr->e * f_v(d_v, i + 1, j, tam) +
+					    ptr->s * f_v(d_v, i, j - 1, tam) +
+					    ptr->n * f_v(d_v, i, j + 1, tam));
 	}
 }
 
 // funções para inicialização!
-__global__ void kernel_set_borda(Node* d_v,float un,float us,float ue,float uo,int tam, int n1, int n2){
+__global__ void kernel_set_borda(Node* d_v,double un,double us,double ue,double uo,int tam, int n1, int n2){
 
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -235,20 +235,20 @@ __global__ void kernel_set_borda(Node* d_v,float un,float us,float ue,float uo,i
 	}
 }
 
-__global__ void	kernel_set_A_B (float* d_a,float* d_b,int n1,int n2,float h1,float h2,int tam){
+__global__ void	kernel_set_A_B (double* d_a,double* d_b,int n1,int n2,double h1,double h2,int tam){
 	int j = 1 + blockIdx.x * blockDim.x + threadIdx.x;
 	int i = 1 + blockIdx.y * blockDim.y + threadIdx.y;
 
 	if (i < n2 + 1 && j < n1 + 1) {
-		float x = i * h1;
-		float y = j * h2;
+		double x = i * h1;
+		double y = j * h2;
 
 		d_a[i * tam + j] = FATORf * x * (1.0f - x) * (0.5f - y);
 		d_b[i * tam + j] = FATORf * y * (1.0f - y) * (x - 0.5f);
 	}
 }
 
-__global__ void	kernel_set_V (Node* d_v,float* d_a,float* d_b,int n1,int n2,float h1,float h2,int tam,float denominadro2,float denominadro1, float temp_media){
+__global__ void	kernel_set_V (Node* d_v,double* d_a,double* d_b,int n1,int n2,double h1,double h2,int tam,double denominadro2,double denominadro1, double temp_media){
 	int j = 1 + blockIdx.x * blockDim.x + threadIdx.x;
 	int i = 1 + blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -262,7 +262,7 @@ __global__ void	kernel_set_V (Node* d_v,float* d_a,float* d_b,int n1,int n2,floa
 	}
 }
 
-__global__ void kernel_set_W (Node*d_v, int n1, int n2, int tam, float h1, float h2){
+__global__ void kernel_set_W (Node*d_v, int n1, int n2, int tam, double h1, double h2){
 	int j = 1 + blockIdx.x * blockDim.x + threadIdx.x;
 	int i = 1 + blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -279,14 +279,14 @@ void init_gpu() {
 	denominadro2 = (4 * (1 + (h2 * h2 / (h1 * h1))));
 
 	int tam = n1 + 2;
-	float temp_media = (us+un+ue+uo) / 4.0;
+	double temp_media = (us+un+ue+uo) / 4.0;
 
 	cudaEvent_t start, stop;
 
 	v = (Node*) malloc((n1 + 2) * (n2 + 2) * sizeof(Node));
 	CUDA_SAFE_CALL(cudaMalloc((void**) &d_v, (n1 + 2) * (n2 + 2) * sizeof(Node)));
-	CUDA_SAFE_CALL(cudaMalloc((void**) &d_a, (n1 + 2) * (n2 + 2) * sizeof(float)));
-	CUDA_SAFE_CALL(cudaMalloc((void**) &d_b, (n1 + 2) * (n2 + 2) * sizeof(float)));
+	CUDA_SAFE_CALL(cudaMalloc((void**) &d_a, (n1 + 2) * (n2 + 2) * sizeof(double)));
+	CUDA_SAFE_CALL(cudaMalloc((void**) &d_b, (n1 + 2) * (n2 + 2) * sizeof(double)));
 
 	if (v == NULL || d_v == NULL || d_a == NULL || d_b == NULL) {
 		printf("---Erro de malloc");
@@ -356,8 +356,12 @@ void gauss_seidel_gpu() {
 
 	CUDA_SAFE_CALL(cudaEventRecord(stop));
 	CUDA_SAFE_CALL(cudaEventSynchronize(stop));
+	CUDA_SAFE_CALL(cudaEventElapsedTime(&delta_eventos, start, stop));
 
+	GET_TIME(inicio);
 	CUDA_SAFE_CALL(cudaMemcpy( v, d_v, (n1 + 2) * (n2 + 2) * sizeof(Node), cudaMemcpyDeviceToHost));
+	GET_TIME(fim);
+	tempo_volta = fim - inicio;
 }
 
 // para o sequencial
@@ -368,15 +372,15 @@ void init() {
 	denominadro2 = (4.0 * (1.0 + (h2 * h2 / (h1 * h1))));
 
 	v = (Node*) malloc((n1 + 2) * (n2 + 2) * sizeof(Node));
-	a = (float*) malloc((n1 + 2) * (n2 + 2) * sizeof(float));
-	b = (float*) malloc((n1 + 2) * (n2 + 2) * sizeof(float));
+	a = (double*) malloc((n1 + 2) * (n2 + 2) * sizeof(double));
+	b = (double*) malloc((n1 + 2) * (n2 + 2) * sizeof(double));
 
 	if (v == NULL || a == NULL || b == NULL) {
 		printf("---Erro de malloc");
 		exit(EXIT_FAILURE);
 	}
 
-	float x, y;
+	double x, y;
 	int i, j;
 
 	int tam = n1 + 2;
@@ -430,7 +434,7 @@ void init() {
 void gauss_seidel_sequencial() {
 	int tam = n1+2;
 	int i, j, k;
-	float aux;
+	double aux;
 	Node* pt;
 
 	for ( k = 0; k < iteracoes; ++k) {
@@ -440,10 +444,10 @@ void gauss_seidel_sequencial() {
 				if (verboso) printf("verm\t[%d][%d]\n", i, j);
 				if (verboso) printf("\tw:%f\n", pt->w);
 				aux =
-					pt->o * f_v(i, j - 1, tam) +
-					pt->e * f_v(i, j + 1, tam) +
-					pt->s * f_v(i - 1, j, tam) +
-					pt->n * f_v(i + 1, j, tam);
+					pt->o * f_v(i- 1, j, tam) +
+					pt->e * f_v(i + 1, j, tam) +
+					pt->s * f_v(i, j - 1, tam) +
+					pt->n * f_v(i, j + 1, tam);
 				if (verboso) printf("\taux:%f\n", aux);
 				pt->temp = (1 - pt->w) * pt->temp + pt->w * aux;
 				if (verboso) printf("\td_v:%f\n", pt->temp);
@@ -455,10 +459,10 @@ void gauss_seidel_sequencial() {
 				pt = &v[i * tam + j];
 				if (verboso) printf("\tw:%f\n", pt->w);
 				aux =
-					pt->o * f_v(i, j - 1, tam) +
-					pt->e * f_v(i, j + 1, tam) +
-					pt->s * f_v(i - 1, j, tam) +
-					pt->n * f_v(i + 1, j, tam);
+					pt->o * f_v(i- 1, j, tam) +
+					pt->e * f_v(i + 1, j, tam) +
+					pt->s * f_v(i, j - 1, tam) +
+					pt->n * f_v(i, j + 1, tam);
 				if (verboso) printf("\taux:%f\n", aux);
 				pt->temp = (1 - pt->w) * pt->temp + pt->w * aux;
 				if (verboso) printf("\td_v:%f\n", pt->temp);
@@ -524,17 +528,17 @@ int main(const int argc, const char** argv) {
 
 		if(verboso) printf(" Executando\n");
 
-		GET_TIME(inicio);
+		// GET_TIME(inicio);
 		gauss_seidel_gpu();
-		GET_TIME(fim);
+		// GET_TIME(fim);
 
-		tempo_gpu = fim - inicio;
+		// tempo_gpu = fim - inicio;
 
 		// impressao em arquivo texto
 		file = fopen("out_gpu_tabelas.txt", "w");
 		for ( int i = 0; i < n2 + 2; i++ ) {
 			for ( int j = 0; j < n1 + 2; j++ ) {
-				fprintf(file, "%6.3f,", v[i * (n1 + 2) + j].temp );
+				fprintf(file, "%6.3f ", v[i * (n1 + 2) + j].temp );
 			}
 			fprintf(file, "\n");
 		}
@@ -569,7 +573,7 @@ int main(const int argc, const char** argv) {
 		file = fopen("out_cpu_tabelas.txt", "w");
 		for ( int i = 0; i < n2 + 2; i++ ) {
 			for ( int j = 0; j < n1 + 2; j++ ) {
-				fprintf(file, "%6.3f,", v[i * (n1 + 2) + j].temp );
+				fprintf(file, "%6.3f ", v[i * (n1 + 2) + j].temp );
 			}
 			fprintf(file, "\n");
 		}
@@ -585,11 +589,12 @@ int main(const int argc, const char** argv) {
 	printf("Pontos: %d x %d\n", n1, n2);
 	printf("Iteracões: %d\n", iteracoes);
 	printf("Tempo total sequencial          = %f seg \n", tempo_seq + time_init_seq);
-	printf("Tempo total GPU                 = %f seg \n\n", tempo_gpu + time_init_gpu);
+	printf("Tempo total GPU                 = %f seg \n\n", delta_eventos / 1000 + time_init_gpu + tempo_volta);
 	printf("Tempo trabalho sequencial       = %f seg \n", tempo_seq);
-	printf("Tempo trabalho paralelo         = %f seg \n\n", tempo_gpu);
+	printf("Tempo trabalho paralelo         = %f seg \n\n", delta_eventos / 1000);
 	printf("Tempo inicialização sequencial  = %f seg \n", time_init_seq);
 	printf("Tempo inicialização por gpu 	= %f seg \n", time_init_gpu);
+	printf("Tempo volta da gpu 	= %f seg \n", tempo_volta);
 
 	CUDA_SAFE_CALL(cudaDeviceReset());
 
